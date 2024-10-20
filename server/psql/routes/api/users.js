@@ -1,25 +1,71 @@
 const express = require('express');
-const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const { check } = require('express-validator');
 const userController = require('../../controllers/users');
 const { validateToken } = require('../../middleware/auth');
+
+const router = express.Router();
+
+const createUserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many account creation requests from this IP, please try again later.',
+});
+
+const profileLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many requests to access profile from this IP, please try again later.',
+});
+
+const updateProfileLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many profile update requests from this IP, please try again later.',
+});
+
+const updatePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many password update requests from this IP, please try again later.',
+});
+
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many password change requests from this IP, please try again later.',
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many password reset requests from this IP, please try again later.',
+});
+
+const verificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many verification requests from this IP, please try again later.',
+});
+
+const transactionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many transaction requests from this IP, please try again later.',
+});
 
 router.get('/profile', validateToken, userController.getUserProfile);
 router.get('/tx/all', validateToken, userController.getUserTransactions);
 router.get('/tx/complete', validateToken, userController.getUserCompleteTransactions);
 router.get('/tx/pending', validateToken, userController.getUserPendingTransactions);
 
-router.post(
-  '/',
-  [
-    check('email', 'Please include a valid email').isEmail(),
-    check(
-      'password',
-      'Please enter a password with 8 or more characters',
-    ).isLength({ min: 8 }),
-  ],
-  userController.createUser,
-);
+router.post('/', createUserLimiter, [
+  check('email', 'Please include a valid email').isEmail(),
+  check(
+    'password',
+    'Please enter a password with 8 or more characters',
+  ).isLength({ min: 8 }),
+], userController.createUser);
 
 router.post(
   '/profile',
@@ -74,7 +120,7 @@ router.post(
 router.post(
   '/forgot_password/:token',
   [
-   // check('name', 'Name is required').not().isEmpty(),
+    // check('name', 'Name is required').not().isEmpty(),
     check('email', 'Please include a valid email').isEmail(),
     check(
       'password',
@@ -130,8 +176,5 @@ router.get(
   validateToken,
   userController.getUserTransactionDetails,
 );
-
-
-
 
 module.exports = router;
