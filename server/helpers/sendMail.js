@@ -1,7 +1,10 @@
 const nodemailer = require('nodemailer');
 const config = require('../psql/config');
+const path = require('path');
 
 const sendEmail = async (sendToEmail, template) => {
+  console.log('Received data: %s', template);
+
   const { subject, text, html } = template;
 
   const transporter = nodemailer.createTransport({
@@ -19,7 +22,16 @@ const sendEmail = async (sendToEmail, template) => {
     subject,
     text,
     html,
+    attachments: [
+      {
+        filename: 'logo.png',
+        path: path.join(__dirname, '../psql/public/images/logo.png'),
+        cid: 'logo',
+      },
+    ],
   };
+
+  console.log("Sending Email with Details:", message);
 
   const info = await transporter.sendMail(message);
 
