@@ -1,6 +1,6 @@
 //require('dotenv').config({ path: '../.env'});
 const config = require('./config');
-const development = {
+const setup = {
   client: "pg",
   connection: {
     host : config.DB_HOST,
@@ -18,6 +18,9 @@ const development = {
   }
 }
 
-console.log("postgresql config", development)
+console.log("postgresql config", setup)
 
-exports.development = development;
+module.exports = {
+  development: setup,
+  production: setup
+};
