@@ -3,121 +3,118 @@ const router = express.Router();
 const { check } = require('express-validator');
 const { validateAdmin, validateFarmer } = require('../../middleware/auth');
 const adminController = require('../../controllers/admin');
-const {refreshToken} = require('../../controllers/auth');
+const { refreshToken } = require('../../controllers/auth');
 const farmerController = require('../../controllers/farmers');
 const transactions = require('../../controllers/transactions');
 
+const emailValidation = check('email', 'Please include a valid email').isEmail();
+const passwordValidation = check('password', 'Password is required').exists();
+const pinValidation = check('pin', 'Pin is required').isNumeric().exists();
+const walletValidation = check('wallet_id', 'Wallet ID is required').not().isEmpty();
+const roleValidation = check('role', 'User Role is required').not().isEmpty();
+const roleIdValidation = check('role_id', 'User Role ID is required').isInt().exists();
+const addressValidation = check('address', 'Farmer address ID is required').isEthereumAddress().exists();
 
 router.get('/', validateAdmin, adminController.getAdmin);
-router.get('/buyers',  validateAdmin, adminController.getBuyers);
-router.get('/farmers',  validateAdmin, farmerController.getFarmers);
-router.get('/permission',  validateAdmin, adminController.getUserPermission);
-router.get('/permissions',  validateAdmin, adminController.getUserPermissions);
-router.get('/pin',  validateAdmin, adminController.getAdminPin);
-router.get('/roles',  validateAdmin, adminController.getUserRoles);
-router.get('/txs',  validateAdmin, transactions.getAllTransactions);
-
+router.get('/buyers', validateAdmin, adminController.getBuyers);
+router.get('/farmers', validateAdmin, farmerController.getFarmers);
+router.get('/permissions', validateAdmin, adminController.getUserPermissions);
+router.get('/pin', validateAdmin, adminController.getAdminPin);
+router.get('/roles', validateAdmin, adminController.getUserRoles);
+router.get('/txs', validateAdmin, transactions.getAllTransactions);
 
 router.post(
-  '/',
-  [
-    check('email', 'Please include a valid email').isEmail(),
-    check('password', 'Password is required').exists(),
-  ],
+  '/login',
+  [emailValidation, passwordValidation],
   adminController.login,
 );
 
+// Create an admin user
 router.post(
-    '/admin',
-    [
-      check('email', 'Please include a valid email').isEmail(),
-      check(
-        'password',
-        'Please enter a password with 12 or more characters',
-        'Password must contain alphabets and numbers',
-      ).isLength({ min: 12 }).isAlphanumeric(),
-    ],
-    validateAdmin,
-    adminController.createAdminUser,
-  );
-  
-  router.post(
-    '/permission',
-    [
-      check('wallet_id', 'Wallet ID is required').not().isEmpty(),
-      check('role_id', 'Please include a valid role').isInt().not().isEmpty(),
-      check('user_role', 'User Role is required').not().isEmpty(),
-    ],   
-    validateAdmin,
-    adminController.updateUserPermission,
-  );
+  '/admin',
+  [
+    emailValidation,
+    check('password', 'Password must be at least 12 characters long and contain letters and numbers')
+      .isLength({ min: 12 })
+      .isAlphanumeric(),
+  ],
+  validateAdmin,
+  adminController.createAdminUser,
+);
 
-  router.post(
-    '/role',
-    [
-      check('role', 'User Role is required').isString().exists(),
-    ],    
-    validateAdmin,
-    adminController.createUserRole,
-  );
-  
-  router.post(
-    '/update/role',
-    [
-      check('role_id', 'User Role ID is required').isInt().exists(),
-      check('role', 'User Role is required').isString().exists(),
-    ],   
-    validateAdmin,
-    adminController.updateUserRole,
-  );
-  
-  router.post(
-    '/farmer/token',
-    [
-      check('x-admin-token', 'admin token is required').isJWT().exists(),
-      check('address', 'farmer address id is required').isEthereumAddress().exists(),
-    ],
-    validateAdmin,
-    farmerController.updateFarmerToken,
-  );
+// Update user permissions
+router.post(
+  '/permission',
+  [
+    walletValidation,
+    check('role_id', 'Please include a valid role').isInt().not().isEmpty(),
+    check('user_role', 'User Role is required').isString().not().isEmpty(),
+  ],
+  validateAdmin,
+  adminController.updateUserPermission,
+);
 
-  router.post(
-    '/farmer/refresh',
-    [
-      check('x-farmer-token', 'farmer token is required').exists(),
-      check('wallet_id', 'farmer wallet id is required').exists(),
-      check('address', 'farmer address id is required').exists(),
-    ],   
-    validateAdmin,
-    validateFarmer,
-    refreshToken,
-  );
+// Create a new user role
+router.post(
+  '/role',
+  [roleValidation],
+  validateAdmin,
+  adminController.createUserRole,
+);
 
-  router.post(
-    '/pin',
-    [
-      check('pin', 'Pin is required').isNumeric().exists(),
-    ],   
-    validateAdmin,
-    adminController.createAdminPin,
-  );
+// Update an existing user role
+router.post(
+  '/update/role',
+  [roleIdValidation, roleValidation],
+  validateAdmin,
+  adminController.updateUserRole,
+);
 
-  router.get(
-    '/refresh',
-    [
-      check('x-admin-token', 'authetication token is required').isJWT().exists()
-    ],
-    refreshToken,
-  );
+// Update a farmer's token
+router.post(
+  '/farmer/token',
+  [
+    check('x-admin-token', 'Admin token is required').isJWT().exists(),
+    addressValidation,
+  ],
+  validateAdmin,
+  farmerController.updateFarmerToken,
+);
 
-  router.delete(
-    '/del/user',
-    [
-      check('email', 'email is required').isEmail().exists(),
-    ],   
-    validateAdmin,
-    adminController.deleteUser,
-  );
+// Refresh a farmer's token
+router.post(
+  '/farmer/refresh',
+  [
+    check('x-farmer-token', 'Farmer token is required').exists(),
+    walletValidation,
+    addressValidation,
+  ],
+  validateAdmin,
+  validateFarmer,
+  refreshToken,
+);
 
+// Create or update admin PIN
+router.post(
+  '/pin',
+  [pinValidation],
+  validateAdmin,
+  adminController.createOrUpdateAdminPin,
+);
+
+// Refresh admin auth token
+router.get(
+  '/refresh',
+  [check('x-admin-token', 'Authentication token is required').isJWT().exists()],
+  refreshToken,
+);
+
+// Delete a user
+router.delete(
+  '/del/user',
+  [emailValidation],
+  validateAdmin,
+  adminController.deleteUser,
+);
 
 module.exports = router;

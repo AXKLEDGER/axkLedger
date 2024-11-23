@@ -1,27 +1,32 @@
 'use strict';
 const path = require('path');
 const configureRoutes = require('./routes');
-const config = require('./config')
+const config = require('./config');
 const http = require('http');
-const port = config.PORT || '8000';
+
+const apiPort = config.API_PORT || '8000';
+const blockchainPort = config.BLOCKCHAIN_PORT || '9000';
 
 const app = require('./app');
 
 configureRoutes(app);
-app.set('port', port);
 
-const server = http.createServer(app);
-server.listen(port, () => {
-  console.log(
-    `Server is running in ${config.NODE_ENV} mode and is listening on port ${port}...`,
-  );
+// API Server setup
+const apiServer = http.createServer(app);
+apiServer.listen(apiPort, () => {
+  console.log(`API Server running in ${config.NODE_ENV} mode on port ${apiPort}`);
 });
 
-server.on('error', (error) => {
-  console.error('error found', error);
+apiServer.on('error', (error) => {
+  console.error('API Server error:', error);
 });
 
-server.on('listening', () => {
-  console.log('Blockchain Server running at :', port);
+// Blockchain Server setup 
+const blockchainServer = http.createServer(app);
+blockchainServer.listen(blockchainPort, () => {
+  console.log(`Blockchain Server running at port ${blockchainPort}`);
 });
 
+blockchainServer.on('error', (error) => {
+  console.error('Blockchain Server error:', error);
+});

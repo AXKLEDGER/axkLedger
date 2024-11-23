@@ -1,13 +1,14 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { check } = require('express-validator');
+const { check, validationResult } = require('express-validator');
 const userController = require('../../controllers/users');
 const { validateToken } = require('../../middleware/auth');
 
 const router = express.Router();
 
+// Rate limiter configurations
 const createUserLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
   message: 'Too many account creation requests from this IP, please try again later.',
 });
@@ -18,163 +19,88 @@ const profileLimiter = rateLimit({
   message: 'Too many requests to access profile from this IP, please try again later.',
 });
 
-const updateProfileLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many profile update requests from this IP, please try again later.',
-});
+// Common validation rules
+const emailValidation = check('email').isEmail().withMessage('Please include a valid email');
+const passwordValidation = () => check('password')
+  .isLength({ min: 12 })
+  .withMessage('Password must be at least 12 characters long.')
+  // .matches(/[A-Z]/)
+  // .withMessage('Password must contain at least one uppercase letter.')
+  .matches(/[a-z]/)
+  .withMessage('Password must contain at least one lowercase letter.')
+  .matches(/[0-9]/)
+  .withMessage('Password must contain at least one number.')
+  .matches(/[\W_]/)
+  .withMessage('Password must contain at least one special character.');
 
-const updatePasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many password update requests from this IP, please try again later.',
-});
-
-const changePasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many password change requests from this IP, please try again later.',
-});
-
-const resetPasswordLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many password reset requests from this IP, please try again later.',
-});
-
-const verificationLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many verification requests from this IP, please try again later.',
-});
-
-const transactionLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: 'Too many transaction requests from this IP, please try again later.',
-});
+const transactionHashValidation = check('hash').isHexadecimal().notEmpty().withMessage('Transaction hash is required');
 
 router.get('/profile', validateToken, userController.getUserProfile);
+
 router.get('/tx/all', validateToken, userController.getUserTransactions);
 router.get('/tx/complete', validateToken, userController.getUserCompleteTransactions);
 router.get('/tx/pending', validateToken, userController.getUserPendingTransactions);
 
 router.post('/', createUserLimiter, [
-  check('email', 'Please include a valid email').isEmail(),
-  check(
-    'password',
-    'Please enter a password with 8 or more characters',
-  ).isLength({ min: 8 }),
+  emailValidation,
+  passwordValidation(8),
 ], userController.createUser);
 
-router.post(
-  '/profile',
-  [
-    check('email', 'Please include a valid email').isEmail(),
-    check('name', 'User name is required').isString().not().isEmpty(),
-  ],
+router.post('/profile', [
   validateToken,
-  userController.updateProfile,
-);
+  emailValidation,
+  check('name').isString().notEmpty().withMessage('User name is required'),
+], userController.updateProfile);
 
-router.post(
-  '/password',
-  [
-    check('email', 'Please include a valid email').isEmail(),
-    check(
-      'password',
-      'Please enter a password with 12 or more characters',
-      'Password must contain alphabets and numbers',
-    ).isLength({ min: 12 }).isAlphanumeric(),
-  ],
+router.post('/password', [
   validateToken,
-  userController.updatePassword,
-);
+  emailValidation,
+  passwordValidation(12),
+], userController.updatePassword);
 
-router.post(
-  '/change',
-  [
-    check('email', 'Please include a valid email').isEmail(),
-    check(
-      'password',
-      'Please enter a password with 8 or more characters',
-    ).isLength({ min: 8 }),
-    check(
-      'new_password',
-      'Please enter a password with 12 or more characters',
-      'Password must contain alphabets and numbers',
-    ).isLength({ min: 12 }).isAlphanumeric(),
-  ],
+router.post('/change', [
   validateToken,
-  userController.changePassword,
-);
+  emailValidation,
+  passwordValidation(8),
+  passwordValidation(12).custom((value, { req }) => {
+    if (value === req.body.password) {
+      throw new Error('New password must be different from the current password');
+    }
+    return true;
+  }),
+], userController.changePassword);
 
-router.post(
-  '/forgot_password',
-  [
-    check('email', 'Please include a valid email').isEmail(),
-  ],
-  userController.sendResetEmailToken,
-);
+router.post('/forgot_password', [
+  emailValidation,
+], userController.sendResetEmailToken);
 
-router.post(
-  '/forgot_password/:token',
-  [
-    // check('name', 'Name is required').not().isEmpty(),
-    check('email', 'Please include a valid email').isEmail(),
-    check(
-      'password',
-      'Please enter a password with 12 or more characters',
-      'Password must contain alphabets and numbers',
-    ).isLength({ min: 12 }).isAlphanumeric(),
-    check('token', 'Reset token is required').isJWT().not().isEmpty(),
-  ],
-  userController.verifyResetToken,
-  userController.resetPassword
-);
+router.post('/forgot_password/:token', [
+  emailValidation,
+  passwordValidation(12),
+  check('token').isJWT().notEmpty().withMessage('Reset token is required'),
+], userController.verifyResetToken, userController.resetPassword);
 
-router.post(
-  '/verify',
-  [
-    check('token', 'token is required').isJWT().not().isEmpty(),
-    check('email', 'Please include a valid email').isEmail(),
-  ],
-  userController.sendVerification,
-);
+router.post('/verify', [
+  emailValidation,
+  check('token').isJWT().notEmpty().withMessage('Token is required'),
+], userController.sendVerification);
 
-router.get(
-  '/otp/:otp',
-  [
-    check('otp', 'otp is required').isNumeric().not().isEmpty()
-  ],
-  userController.verifyOTP,
-);
+router.get('/otp/:otp', [
+  check('otp').isNumeric().notEmpty().withMessage('OTP is required'),
+], userController.verifyOTP);
 
-router.get(
-  '/verify',
-  [
-    check('x-auth-token', 'token is required').isJWT().not().isEmpty()
-  ],
+router.get('/verify', [
   validateToken,
-  userController.createEmailToken,
-);
+  check('x-auth-token').isJWT().notEmpty().withMessage('Token is required'),
+], userController.createEmailToken);
 
-router.get(
-  '/verify/:token',
-  [
-    check('token', 'token is required').isJWT().not().isEmpty(),
-  ],
-  userController.verifyToken,
-);
+router.get('/verify/:token', [
+  check('token').isJWT().notEmpty().withMessage('Token is required'),
+], userController.verifyToken);
 
-
-router.get(
-  '/tx',
-  [
-    check('hash', 'transaction hash is required').isHexadecimal().not().isEmpty(),
-  ],
+router.get('/tx', [
   validateToken,
-  userController.getUserTransactionDetails,
-);
+  transactionHashValidation,
+], userController.getUserTransactionDetails);
 
 module.exports = router;

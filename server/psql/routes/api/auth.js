@@ -1,112 +1,94 @@
 const express = require('express');
 const router = express.Router();
 const { check } = require('express-validator');
-const {validateToken, validateFarmer} = require('../../middleware/auth');
-const {createFarmerKey} = require('../../controllers/farmers');
+const { validateToken, validateFarmer } = require('../../middleware/auth');
+const { createFarmerKey } = require('../../controllers/farmers');
 const authController = require('../../controllers/auth');
 const rateLimit = require('express-rate-limit');
 
-//const { createUserRole } = require('../../models/users');
+// Common validation rules
+const emailPasswordValidation = [
+  check('email', 'Please include a valid email').isEmail(),
+  check('password', 'Password is required').exists(),
+];
 
-router.get('/', validateToken, authController.getUser);
-router.get('/pin', validateToken, authController.getUserPin);
+const pinValidation = [
+  check('pin', 'Pin is required').isNumeric().exists(),
+];
 
+const updatePinValidation = [
+  check('currentPin', 'Current PIN is required').isNumeric().exists(),
+  check('newPin', 'New PIN is required').isNumeric().exists(),
+];
+
+const keyValidation = [
+  check('key', 'Key is required').isNumeric().exists(),
+];
+
+const permissionValidation = [
+  check('wallet_id', 'Wallet ID is required').not().isEmpty(),
+  check('role_id', 'Please include a valid role ID').isInt().not().isEmpty(),
+  check('user_role', 'User Role is required').isString().not().isEmpty(),
+];
+
+// Rate limiter middleware for login
+const loginRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // Limit each IP to 3 requests per windowMs
+  headers: false,
+});
+
+// User routes
+router.get('/', validateToken, authController.getUser); // Get current user's data
+router.get('/pin', validateToken, authController.getUserPin); // Get current user's PIN
+
+// POST: User login
 router.post(
-  '/',
-  rateLimit({
-    windowMs: 60 * 60 * 1000,
-    headers: false,
-    max:  3,
-  }),
-  [
-    check('email', 'Please include a valid email').isEmail(),
-    check('password', 'Password is required').exists(),
-  ],
+  '/login',
+  loginRateLimiter,
+  emailPasswordValidation,
   authController.login,
 );
 
+// POST: Create or update user PIN
 router.post(
   '/pin',
-  [
-    check('pin', 'Pin is required').isNumeric().exists(),
-  ],
+  pinValidation,
   validateToken,
-  authController.createUserPin,
+  authController.createUserPin, // Can also handle creating or validating a PIN
 );
 
+// PUT: Update existing user PIN
 router.put(
   '/pin',
-  [
-    check('passphrase', 'Pin is required').isNumeric().exists(),
-    check('new_passphrase', 'Pin is required').isNumeric().exists(),
-  ],
+  updatePinValidation,
   validateToken,
   authController.updateUserPin,
 );
 
+// POST: Create a farmer key
 router.post(
   '/key',
-  [
-    //check('pin', 'Please include a valid pin').isEmail(),
-    check('key', 'Key is required').isNumeric().exists(),
-  ],
+  keyValidation,
   validateFarmer,
   createFarmerKey,
 );
 
+// GET: Refresh user authentication token
 router.get(
   '/refresh',
   [
-    check('x-auth-token', 'authetication token is required').isJWT().exists()
+    check('x-auth-token', 'Authentication token is required').isJWT().exists(),
   ],
   authController.refreshToken,
 );
 
+// POST: Update user permissions
 router.post(
   '/permission',
-  [
-    check('wallet_id', 'Wallet ID is required').not().isEmpty(),
-    check('role_id', 'Please include a valid role').isInt().not().isEmpty(),
-    check('user_role', 'User Role is required').isString().not().isEmpty(),
-  ],
+  permissionValidation,
   validateToken,
   authController.updateUserPermission,
 );
 
 module.exports = router;
-/**
- * app.post('/login', 
-
-    // 10 tires in 10 minutes
-    rateLimit({
-        windowMs: 10 * 60 * 1000,
-        headers: false,
-        max: 10,
-    }),
-
-    // 5 more tries in 20 minutes
-    rateLimit({
-        windowMs: 20 * 60 * 1000,
-        headers: false,
-        max: 10 + 5,
-    }),
-
-    // 3 more tries in 1 hour
-    rateLimit({
-        windowMs: 60 * 60 * 1000,
-        headers: false,
-        max: 10 + 5 + 3,
-    }),
-
-    // 1 more try in 24 hours
-    rateLimit({
-        windowMs: 24 * 60 * 60 * 1000,
-        headers: false,
-        max: 10 + 5 + 3 + 1,
-    }),
-
-    function(req, res) {
-        // handle login attempt here, if it passed all the rate limiters
-    }
-);
- */
